@@ -21,7 +21,7 @@ function is_stim_on = find_vns_stim_on(ekg_data, fs_in, varargin)
 % onset/offset ramping time).
 
 %% Load Variable Inputs:
-fs_out = 100;
+% fs_out = 100;
 if length(varargin)>0
     if ~isempty(varargin{1})
         fs_out = varargin{1};
@@ -42,18 +42,38 @@ if length(varargin)>2
     end
 end
 
-
-
+% extra parameters (MKL ADDED 5/17/17)
+debug_flag = 1;
+convolve_ideal_stim_flag = 0;
 
 %% Find VNS power:
-    ecg_data_vns = extract_vns_stim_i(ekg_data,fs_in,stim_freq);
-    ecg_data_vns_smth = smooth(ecg_data_vns,2*round(fs_in)); % smooth data to eliminate transient noise artifacts
-    % Downsample VNS data
-    ecg_data_vns_ds = resample(ecg_data_vns_smth, fs_out, fs_in);
-    on_thresh = mean([median(ecg_data_vns_ds(ecg_data_vns_ds>0)), median(ecg_data_vns_ds(ecg_data_vns_ds<0))]); % midpoint between high and low value.
-    is_stim_on = (ecg_data_vns_ds > on_thresh);
+ecg_data_vns = extract_vns_stim_i(ekg_data,fs_in,stim_freq);
+ecg_data_vns_smth = smooth(ecg_data_vns,2*round(fs_in)); % smooth data to eliminate transient noise artifacts
+% Downsample VNS data
+ecg_data_vns_ds = ecg_data_vns_smth; % resample(ecg_data_vns_smth, fs_out, fs_in);
+on_thresh = mean([median(ecg_data_vns_ds(ecg_data_vns_ds>0)), median(ecg_data_vns_ds(ecg_data_vns_ds<0))]); % midpoint between high and low value.
+is_stim_on = (ecg_data_vns_ds > on_thresh);
 
-    %% use convlution with idea stimulation artifact to pinpoint onset:
+stim_duration_thresh = 27; % minimum time in seconds of stim
+[onsets, offsets] = find_boolean_on(is_stim_on, stim_duration_thresh*fs_out);
+
+if debug_flag
+    figure;
+    h(1) = subplot(2,1,1);
+    plot(ekg_data);
+    h(2) = subplot(2,1,2);
+    plot(ecg_data_vns);
+    hold on;
+    plot(ecg_data_vns_smth);
+    linkaxes(h,'x');
+    for i = 1:length(onsets)
+        line([onsets(i) onsets(i)],get(gca,'YLim'),'Color','k');
+        hold on;
+    end
+    plot(is_stim_on,'Color','r');
+end
+%% use convlution with idea stimulation artifact to pinpoint onset:
+if convolve_ideal_stim_flag
     ecg_data_vns_ds = resample(ecg_data_vns, fs_out, fs_in);
     
     if length(dutycycle_params) == 1
@@ -69,7 +89,7 @@ end
     is_stim_on_xcorr = false(size(is_stim_on));
     
     stim_duration_thresh = 27; % minimum time in seconds of stim
-    [onsets, offsets] = find_boolean_on(is_stim_on, stim_duration_thresh*fs_out);  
+    [onsets, offsets] = find_boolean_on(is_stim_on, stim_duration_thresh*fs_out);
     for n = 1:length(onsets)
         start_pad = 5; % seconds before start on onset to look
         stop_pad = 5; % seconds after start of onset to look
@@ -104,4 +124,5 @@ end
     
     is_stim_on = is_stim_on_xcorr;
 end
- 
+
+end

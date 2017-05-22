@@ -15,12 +15,12 @@
 % Need to output everything at each stage and see if it makes sense
 
 % VNS process data script:
-root_dir = '/Users/willschuerman/Documents/Research/Data/EC151/EC151_B32';
+root_dir = '/Users/mattleonard/Documents/Research/data/EC151/VNS/data'; % '/Users/mattleonard/Documents/Research/pia/data_store1/human/prcsd_data/EC151/EC151_B46';
 %dat_dir = [root_dir '/EC131_759989b0'];
 dat_dir = [root_dir filesep 'h5'];
-brain_dir = '/Users/willschuerman/Documents/Research/Data/EC151/BrainPlot';
+brain_dir = '/Users/mattleonard/Documents/Research/pia/data_store2/imaging/subjects';
 patient_code = 'EC151';
-out_dir = root_dir;
+out_dir = '/Users/mattleonard/Documents/Research/data/EC151';
 % 
 % %% View bad channels:
 % Pre-processed data - No hilbert transform
@@ -37,16 +37,30 @@ out_dir = root_dir;
 % white matter electrodes from all other ones. Potentially better than
 % notching. 
 
-% 
-VNS_raw = VNS_process_raw(patient_code, dat_dir, brain_dir, 3,[1,2,4:85], [],'load_RAW_erps',true,'load_env',false,'notch_data',true, 'VNS_duty_cycle', [2,28,0]);
-[is_bad_chan] = plot_spectra_debug(VNS_raw, 3052, 0.6); % FIND EXACT SAMPLING RATE
-visually_inspect_channels(VNS_raw); %also another (probably better) method
-% of detecting bad channels
-is_bad_chan = ones(84,1);
-is_bad_chan([6:14, 16, 19:36, 42:72, 74:81, 84]) = 0;
-clear VNS_raw
+% parameters
+recType = 'TDT';
+load([brain_dir '/' patient_code '/elecs/' recType '_elecs_all.mat']);
 
-VNS_dat = VNS_process_raw(patient_code, dat_dir, brain_dir,1 ,2:85, [],'load_env',true,'VNS_duty_cycle', [2,28,0]);
+ch = intersect((find(~strcmpi(anatomy(:,4),''))),(find(~strcmpi(anatomy(:,4),'Left-Cerebral-White-Matter'))));
+vns_ch = (find(strcmpi(anatomy(:,4),'Left-Cerebral-White-Matter'),1,'first'));
+ch = sort([ch' vns_ch]);
+
+CARflag = 1;
+
+fsIn_fsOut = [1024 1024];
+VNS_duty_cycle = [2,28,0];
+
+%% 
+
+VNS_raw = VNS_process_raw(patient_code, dat_dir, brain_dir, vns_ch, ch, [],'load_RAW_erps',true,'load_env',false,'notch_data',false, 'VNS_duty_cycle', VNS_duty_cycle,'fsIn_fsOut',fsIn_fsOut,'recType',recType,'CARflag',CARflag);
+% [is_bad_chan] = plot_spectra_debug(VNS_raw, 3052, 0.6); % FIND EXACT SAMPLING RATE
+% visually_inspect_channels(VNS_raw); %also another (probably better) method
+% % of detecting bad channels
+% is_bad_chan = ones(84,1);
+% is_bad_chan([6:14, 16, 19:36, 42:72, 74:81, 84]) = 0;
+% clear VNS_raw
+
+VNS_dat = VNS_process_raw(patient_code, dat_dir, brain_dir,vns_ch ,ch, [],'load_env',true,'VNS_duty_cycle', VNS_duty_cycle,'CARflag',CARflag);
 visually_inspect_channels(VNS_dat);
 VNS_dat.good_channels = ~is_bad_chan;
 % % %% Find bad times:

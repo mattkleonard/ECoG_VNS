@@ -23,6 +23,7 @@ ecog_dat = zeros(size(raw_dat,1),dat_length_ds);
 %% Anlytic Amplitude
 if get_env
     for j = 1:size(raw_dat,1)
+        fprintf('Electrode [%d] of [%d]\n',j,size(raw_dat,1));
         tmp.data = raw_dat(j,:);
         tmp.sampFreq = fs_in;
         filteredData = processingHilbertTransform_filterbankGUI_meanout(tmp,fs_in, freq_range);

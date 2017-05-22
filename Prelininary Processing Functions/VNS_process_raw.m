@@ -85,6 +85,15 @@ if length(varargin)>0
     end
 end
 
+%% Process Data Parameters:
+%fp = 1024;
+theta_freqs = [4,7];
+alpha_freqs = [8,15];
+beta_freqs = [18, 30];
+low_gamma_freqs = [33 55];
+high_gamma_freqs = [70 150];
+vns_freqs = [24 26];
+
 %% Load Flags:
 % notch data: notch data to remove the VNS harmonics
 if ~isempty(find(strcmpi(varargin,'notch_data')))
@@ -110,8 +119,12 @@ end
 
 % Loads all blocks of Clinical data in Root_dir (otherwise specify a range)
 if ~isempty(find(strcmpi(varargin,'load_full_dir')))
-    load_full_dir = false;
-    load_range = varargin{find(strcmpi(varargin,'load_full_dir'))+1};
+    if ~isempty(varargin{find(strcmpi(varargin,'load_full_dir'))+1})
+        load_full_dir = false;
+        load_range = varargin{find(strcmpi(varargin,'load_full_dir'))+1};
+    else
+        load_full_dir = true;
+    end
 else
     load_full_dir = true;
 end
@@ -160,17 +173,36 @@ else
     load_peak_freqs = false;
 end
 
+% get sampling rate info
+if ~isempty(find(strcmpi(varargin,'fsIn_fsOut')));
+    fs = varargin{find(strcmpi(varargin,'fsIn_fsOut'))+1};
+    fs_in = fs(1);
+    fs_out = fs(2);
+else
+    fs_in = 1024;
+    fs_out = 1024; % 100;  % down sample frequency MKL CHANGED TO NO DOWNSAMPLE
+end
 blank_singular_anatomy = false; % ignore the names of anatomical regions that are found only once
 load_stim_freq_raw = false; % load the stimulation frequency harmonics
 
+% get electrode array type
+if ~isempty(find(strcmpi(varargin,'recType')));
+    recType = varargin{find(strcmpi(varargin,'recType'))+1};
+else
+    recType = 'clinical';
+end
 
-
-
+% whether to CAR the data
+if ~isempty(find(strcmpi(varargin,'CARflag')));
+    CARflag = varargin{find(strcmpi(varargin,'CARflag'))+1};
+else
+    CARflag = false;
+end
 
 %% Load anatomy file:
-anatomy_file = [brain_dir filesep patient_code '/elecs/clinical_elecs_all.mat'];
+anatomy_file = [brain_dir filesep patient_code '/elecs/' recType '_elecs_all.mat'];
 if exist(anatomy_file) == 2
-    load([brain_dir filesep patient_code '/elecs/clinical_elecs_all.mat']);
+    load([brain_dir filesep patient_code '/elecs/' recType '_elecs_all.mat']);
     anatomy_elecs = anatomy(electrodes,4);
 else
     anatomy_elecs = strsplit(num2str(1:length(electrodes)));
@@ -196,7 +228,7 @@ electrodes = electrodes(electrode_order); % group electrodes by anatomy
 %% Load list of h5 filenames
 filenames = dir(root_dir);
 filenames(1:2) = []; % on windows, only two files
-%filenames(1:4) = []; % on mac, this needs an extra 2 files????
+% filenames(1:4) = []; % on mac, this needs an extra 2 files????
 
 for k = 1:length(filenames)
     test_files{k} = filenames(k).name;
@@ -244,26 +276,16 @@ duration = timestamps(end) - timestamps(1);
 %duration=(tsvec(end,5)*60+tsvec(end,6))-(tsvec(1,5)*60+tsvec(1,6));%total time
 %fp = round(length(timestamps)/duration); %samples/sec (must be integer)
 fileInfo = h5info([filesep root_dir filesep test_files{1}]);
-fileInfo = h5info([filesep root_dir filesep test_files{k}]);
-[p,q] = rat(1024/round(fileInfo.Datasets(1).Attributes(2).Value));
-
-%% Process Data Parameters:
-%fp = 1024;
-fs_in = 1024;
-fs_out = 100;  % down sample frequency
-theta_freqs = [4,7];
-alpha_freqs = [8,15];
-beta_freqs = [18, 30];
-low_gamma_freqs = [33 55];
-high_gamma_freqs = [70 150];
-vns_freqs = [24 26];
+% fileInfo = h5info([filesep root_dir filesep test_files{k}]);
+[p,q] = rat(fs_in/fileInfo.Datasets(1).Attributes(2).Value); % MKL FIXED 5/17/17
 
 %% Initialize Data Arrays (Will save alot of memory)
 dat_length_full = zeros(length(test_files),1); % array of length of each test block at full sample rate
 dat_length_ds = zeros(length(test_files),1);    % array of lenght of each test block at downsampled sample rate
 for k = 1:length(test_files)
     timestamps = hdf5read([root_dir filesep test_files{k}], 'timestamp vector');
-    timestamps_ds = resample(timestamps,fs_out,fs_in);
+    timestamps_ds = resample(timestamps,p,q);
+%     timestamps_ds = resample(timestamps,fs_out,fs_in);
     dat_length_full(k) = length(timestamps);
     dat_length_ds(k) = length(timestamps_ds);
 end
@@ -339,47 +361,83 @@ file_offset_ind_ds = cum_data_length(1:end); % indicates the index where the blo
 %% Load Data:
 for k = 1:length(test_files)
     % Time Data
-    disp(k);
+    fprintf('Processing block [%d] of [%d]\n\n',k,length(test_files));
     disp(datetime('now'));
     timestamps = hdf5read([root_dir filesep test_files{k}], 'timestamp vector');
     tsvec = datevec((timestamps - (7*3600))/86400 + datenum(1970,1,1));
         %duration=(tsvec(end,5)*60+tsvec(end,6))-(tsvec(1,5)*60+tsvec(1,6));%total time
     duration = (timestamps(end)-timestamps(1));
     fileInfo = h5info([filesep root_dir filesep test_files{k}]);
-    [p,q] = rat(1024/round(fileInfo.Datasets(1).Attributes(2).Value)); % does it need an integer value? %samples/sec
+    [p,q] = rat(1024/fileInfo.Datasets(1).Attributes(2).Value); % MKL FIXED 5/17/17
     
-    % ECoG Data
-    data=hdf5read([root_dir filesep test_files{k}],'ECoG Array');
-    data = resample(data,p,q);
-    if notch_flag
-        data(electrodes,:) = applyLineNoiseNotch_VNS_Harmonics(data(electrodes,:),fs_in);
+    % ECoG Data - MKL CHANGED TO RESAMPLE IN LOOP
+    fprintf('Loading h5 file....');
+    tic;
+    data_full = h5read([root_dir filesep test_files{k}],'/ECoG Array');
+    toc
+    fprintf('Done\n');
+    tmp = resample(data_full(1,:),p,q);
+    data = NaN(size(data_full,1),size(tmp,2));
+    clear tmp;
+    for i = 1:length(electrodes)
+        fprintf('Resampling electrode [%d] of [%d]\n',i,length(electrodes));
+        data(electrodes(i),:) = resample(data_full(electrodes(i),:),p,q);
     end
-    % Notch60Harmonics
-    data(electrodes,:) = apply60HzNotch_filter(data(electrodes,:), fs_in);
+    clear data_full;
+%     data=hdf5read([root_dir filesep test_files{k}],'ECoG Array');
+%     data = resample(data,p,q); % MKL: THIS DOESN'T WORK BECAUSE COLUMN-WISE
+    
+    if notch_flag % Notch VNS Harmonics - MKL CHANGED TO FILTER BY ELECTRODE
+        fprintf('Applying VNS notch filters\n');
+        for i = 1:length(electrodes)
+            fprintf('Electrode [%d] of [%d]\n',i,length(electrodes));
+            data(electrodes(i),:) = applyLineNoiseNotch_VNS_Harmonics(data(electrodes(i),:),fs_in);
+        end
+%         data(electrodes,:) = applyLineNoiseNotch_VNS_Harmonics(data(electrodes,:),fs_in);
+    end
+    
+    % Notch60Harmonics - MKL CHANGED TfO FILTER BY ELECTRODE
+    fprintf('Applying line noise filters\n');
+    for i = 1:length(electrodes)
+        fprintf('Electrode [%d] of [%d]\n',i,length(electrodes));
+        data(electrodes(i),:) = apply60HzNotch_filter(data(electrodes(i),:), fs_in);
+    end
+%     data(electrodes,:) = apply60HzNotch_filter(data(electrodes,:), fs_in);
 
-    data_z = gdivide(gsubtract(data(electrodes,:),mean(data(electrodes,:),2)),std(data(electrodes,:),[],2));
+    if CARflag
+        fprintf('Applying CAR\n');
+        data = data - nanmean(data,1);
+    end
+    
+    data_z = data;
+%     data_z = gdivide(gsubtract(data(electrodes,:),mean(data(electrodes,:),2)),std(data(electrodes,:),[],2));
 
 
     %% Generate Analytic Amplitude (Envelope Data)
     if load_envelope
         % Theta
-        ecog_block = load_ecog_block(data_z, theta_freqs, true, fs_in, fs_out, dat_length_ds(k));
+        fprintf('Performing hilbert transform for theta band\n');
+        ecog_block = load_ecog_block(data_z(electrodes,:), theta_freqs, true, fs_in, fs_out, dat_length_ds(k));
         ecog_theta_env(:,file_onset_inds_ds(k):file_offset_ind_ds(k)) = ecog_block;
 
         %alpha
-        ecog_block = load_ecog_block(data_z, alpha_freqs, true, fs_in, fs_out, dat_length_ds(k));
+        fprintf('Performing hilbert transform for alpha band\n');
+        ecog_block = load_ecog_block(data_z(electrodes,:), alpha_freqs, true, fs_in, fs_out, dat_length_ds(k));
         ecog_alpha_env(:,file_onset_inds_ds(k):file_offset_ind_ds(k)) = ecog_block;
 
         %beta
-        ecog_block = load_ecog_block(data_z, beta_freqs, true, fs_in, fs_out, dat_length_ds(k));
+        fprintf('Performing hilbert transform for beta band\n');
+        ecog_block = load_ecog_block(data_z(electrodes,:), beta_freqs, true, fs_in, fs_out, dat_length_ds(k));
         ecog_beta_env(:,file_onset_inds_ds(k):file_offset_ind_ds(k)) = ecog_block;
 
         %low gamma
-        ecog_block = load_ecog_block(data_z, low_gamma_freqs, true, fs_in, fs_out, dat_length_ds(k));
+        fprintf('Performing hilbert transform for low gamma band\n');
+        ecog_block = load_ecog_block(data_z(electrodes,:), low_gamma_freqs, true, fs_in, fs_out, dat_length_ds(k));
         ecog_lg_env(:,file_onset_inds_ds(k):file_offset_ind_ds(k)) = ecog_block;
 
         %high gamma
-        ecog_block = load_ecog_block(data_z, high_gamma_freqs, true, fs_in, fs_out, dat_length_ds(k));
+        fprintf('Performing hilbert transform for high gamma band\n');
+        ecog_block = load_ecog_block(data_z(electrodes,:), high_gamma_freqs, true, fs_in, fs_out, dat_length_ds(k));
         ecog_hg_env(:,file_onset_inds_ds(k):file_offset_ind_ds(k)) = ecog_block;
     end
 
@@ -447,9 +505,14 @@ for k = 1:length(test_files)
         vns_raw(:,file_onset_inds_full(k):file_offset_ind_full(k)) = data(ekg_ch,:)';
     end
 
-    %% Generate Stiulation ON/OFF Data
-    ekg_block = data(ekg_ch,:);
-    is_stim_on_blk = find_vns_stim_on(ekg_block, fs_in, fs_out, stim_freq, VNS_duty_cycle);
+    %% Generate Stimulation ON/OFF Data
+    if length(ekg_ch) > 1
+        ekg_block = data(electrodes(find(electrodes == ekg_ch(1))),:) - data(electrodes(find(electrodes == ekg_ch(2))),:);
+    else
+        ekg_block = data(electrodes(find(electrodes == ekg_ch)),:);
+    end
+    is_stim_on_blk = find_vns_stim_on(ekg_block, fs_in, fs_out, stim_freq, VNS_duty_cycle); % MKL NO DOWNSAMPLE
+%     is_stim_on_blk = find_vns_stim_on(ekg_block, fs_in, fs_out, stim_freq, VNS_duty_cycle);
     is_stim_on(file_onset_inds_ds(k):file_offset_ind_ds(k)) = is_stim_on_blk;
 
 
@@ -464,8 +527,10 @@ for k = 1:length(test_files)
     %% Load RAW data ERPs:
     if load_raw_erps
         stim_duration_thresh = 2; % minimum time in seconds of stim
-        [onsets, offsets] = find_boolean_on(is_stim_on_blk, stim_duration_thresh*fs_out);               % stim:
-        onsets_raw = round(onsets*fs_in/fs_out);
+        [onsets, offsets] = find_boolean_on(is_stim_on_blk, stim_duration_thresh*fs_in);               % stim:
+        onsets_raw = onsets;
+%         [onsets, offsets] = find_boolean_on(is_stim_on_blk, stim_duration_thresh*fs_out);               % stim:
+%         onsets_raw = round(onsets*fs_in/fs_out);
 
         raw_erp_win = [-10 10];
         [erps_blk, time_axis] = make_vns_erps(data_z, onsets_raw,fs_in, raw_erp_win);
@@ -523,8 +588,10 @@ is_stim_on = logical(is_stim_on);
 
 %% get event onsets:
 stim_duration_thresh = 2; % minimum time in seconds of stim
-[onsets, offsets] = find_boolean_on(is_stim_on, stim_duration_thresh*fs_out);               % stim:
-[onsets_nostim, offsets_nostim] = find_boolean_on(~is_stim_on, stim_duration_thresh*fs_out); % non-stim
+[onsets, offsets] = find_boolean_on(is_stim_on, stim_duration_thresh*fs_in);               % stim:
+[onsets_nostim, offsets_nostim] = find_boolean_on(~is_stim_on, stim_duration_thresh*fs_in); % non-stim
+% [onsets, offsets] = find_boolean_on(is_stim_on, stim_duration_thresh*fs_out);               % stim:
+% [onsets_nostim, offsets_nostim] = find_boolean_on(~is_stim_on, stim_duration_thresh*fs_out); % non-stim
 if load_raw
     [onsets_full, offsets_full] = find_boolean_on(is_stim_on_full, stim_duration_thresh*fs_in);               % stim:
     [onsets_nostima_full, offsets_nostim_full] = find_boolean_on(~is_stim_on_full, stim_duration_thresh*fs_in); % non-stim
@@ -584,13 +651,13 @@ end
 
 
 %% Delete Bad Channels:
-bad_chan_list = [];
-%bad_chan_list = [1:19 41 43 60 71];
-%bad_chan_list = [1:19 41 43 60 70 71]; % used in first set of recordings
-bad_chan_list = [1:19 41 43 60 70 71 89 120]; % used in 9/4 recordings
-good_channels = true(length(anatomy_elecs),1); % boolean reports true for bad channels
-good_channels(bad_chan_list) = false;
-VNS_dat.good_channels = good_channels;
+% bad_chan_list = [];
+% %bad_chan_list = [1:19 41 43 60 71];
+% %bad_chan_list = [1:19 41 43 60 70 71]; % used in first set of recordings
+% bad_chan_list = [1:19 41 43 60 70 71 89 120]; % used in 9/4 recordings
+% good_channels = true(length(anatomy_elecs),1); % boolean reports true for bad channels
+% good_channels(bad_chan_list) = false;
+% VNS_dat.good_channels = good_channels;
 
 
 %% DELETE BAD TRIALS;
