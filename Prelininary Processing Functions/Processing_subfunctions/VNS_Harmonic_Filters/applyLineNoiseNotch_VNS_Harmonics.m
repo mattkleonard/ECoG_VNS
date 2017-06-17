@@ -9,14 +9,15 @@ function ecog_filt = applyLineNoiseNotch_VNS_Harmonics(ecog,sampFreq,varargin)
 
 % This function automatically generates a single FIR filter that will include all of the
 % harmonics and then applies this to the data.
-notchFreq=25;
 if length(varargin)>0
-    if ~isempty(varargin{1})
-        notchFreq = varargin{1};
+    if ~isempty(find(strcmpi(varargin,'stim_freq')));
+        notchFreq = varargin{find(strcmpi(varargin,'stim_freq'))+1};
+    else
+        notchFreq = 25;
     end
 end
 
-max_harmonic = 200; % set as a constant because we only look at ecog bands from [4, 200] hz
+max_harmonic = 175; % set as a constant because we only look at ecog bands from [4, 200] hz
 harmonics = notchFreq:notchFreq:max_harmonic;
 
 %% Generate Notch Labels

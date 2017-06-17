@@ -1,4 +1,4 @@
-function is_stim_on = find_vns_stim_on(ekg_data, fs_in, varargin)
+function [is_stim_on,onsets,offsets] = find_vns_stim_on(ekg_data, fs_in, varargin)
 %% This function finds the timing of the VNS stimulation. It uses the ekg channel
 % as well as data about the frequency of the data, the stimulation and its
 % duration and uses this to measure the power of VNS stimulation over time
@@ -21,30 +21,41 @@ function is_stim_on = find_vns_stim_on(ekg_data, fs_in, varargin)
 % onset/offset ramping time).
 
 %% Load Variable Inputs:
-% fs_out = 100;
-if length(varargin)>0
-    if ~isempty(varargin{1})
-        fs_out = varargin{1};
-    end
+
+% stimulation frequency
+if ~isempty(find(strcmpi(varargin,'stim_freq')));
+    stim_freq = varargin{find(strcmpi(varargin,'stim_freq'))+1};
+else
+    stim_freq = 25;
 end
 
-stim_freq = 25;
-if length(varargin)>1
-    if ~isempty(varargin{2})
-        stim_freq = varargin{2};
-    end
+% ERP window
+if ~isempty(find(strcmpi(varargin,'ERP_times')));
+    ERP_times = varargin{find(strcmpi(varargin,'ERP_times'))+1};
+else
+    ERP_times = [-10 10];
 end
 
-dutycycle_params = [30,2];
-if length(varargin)>2
-    if ~isempty(varargin{3})
-        dutycycle_params = varargin{3};
-    end
+% duty cycle info
+if ~isempty(find(strcmpi(varargin,'VNS_duty_cycle')));
+    VNS_duty_cycle = varargin{find(strcmpi(varargin,'VNS_duty_cycle'))+1};
+else
+    VNS_duty_cycle = [2,26,2];
 end
 
-% extra parameters (MKL ADDED 5/17/17)
-debug_flag = 1;
-convolve_ideal_stim_flag = 0;
+% whether to show debug plot
+if ~isempty(find(strcmpi(varargin,'debug_flag')));
+    debug_flag = varargin{find(strcmpi(varargin,'debug_flag'))+1};
+else
+    debug_flag = 1;
+end
+
+% whether to convolve ideal stim shape
+if ~isempty(find(strcmpi(varargin,'convolve_ideal_stim_flag')));
+    convolve_ideal_stim_flag = varargin{find(strcmpi(varargin,'convolve_ideal_stim_flag'))+1};
+else
+    convolve_ideal_stim_flag = 0;
+end
 
 %% Find VNS power:
 ecg_data_vns = extract_vns_stim_i(ekg_data,fs_in,stim_freq);
@@ -54,11 +65,17 @@ ecg_data_vns_ds = ecg_data_vns_smth; % resample(ecg_data_vns_smth, fs_out, fs_in
 on_thresh = mean([median(ecg_data_vns_ds(ecg_data_vns_ds>0)), median(ecg_data_vns_ds(ecg_data_vns_ds<0))]); % midpoint between high and low value.
 is_stim_on = (ecg_data_vns_ds > on_thresh);
 
-stim_duration_thresh = 27; % minimum time in seconds of stim
-[onsets, offsets] = find_boolean_on(is_stim_on, stim_duration_thresh*fs_out);
-
+stim_duration_thresh = ERP_times(2)*fs_in; % minimum time in seconds of stim
+[onsets, offsets] = find_boolean_on(is_stim_on, 'set_dur_thresh',stim_duration_thresh,'fs_in',fs_in,'ERP_times',ERP_times);
+is_stim_on = zeros(size(is_stim_on));
+if length(onsets) > 0
+    for i = 1:length(onsets)
+        is_stim_on(onsets(i):offsets(i)) = 1;
+    end
+end
 if debug_flag
-    figure;
+    figure(1);
+    clf;
     h(1) = subplot(2,1,1);
     plot(ekg_data);
     h(2) = subplot(2,1,2);
@@ -71,19 +88,20 @@ if debug_flag
         hold on;
     end
     plot(is_stim_on,'Color','r');
+    drawnow;
 end
 %% use convlution with idea stimulation artifact to pinpoint onset:
 if convolve_ideal_stim_flag
     ecg_data_vns_ds = resample(ecg_data_vns, fs_out, fs_in);
     
-    if length(dutycycle_params) == 1
-        vns_pulse_ideal = generate_ideal_vns_pulse(fs_out,dutycycle_params(1));
-    elseif length(dutycycle_params) == 2
-        vns_pulse_ideal = generate_ideal_vns_pulse(fs_out,dutycycle_params(1),dutycycle_params(2));
-    elseif length(dutycycle_params) == 3
-        vns_pulse_ideal = generate_ideal_vns_pulse(fs_out,dutycycle_params(1),dutycycle_params(2),dutycycle_params(3));
+    if length(VNS_duty_cycle) == 1
+        vns_pulse_ideal = generate_ideal_vns_pulse(fs_out,VNS_duty_cycle(1));
+    elseif length(VNS_duty_cycle) == 2
+        vns_pulse_ideal = generate_ideal_vns_pulse(fs_out,VNS_duty_cycle(1),VNS_duty_cycle(2));
+    elseif length(VNS_duty_cycle) == 3
+        vns_pulse_ideal = generate_ideal_vns_pulse(fs_out,VNS_duty_cycle(1),VNS_duty_cycle(2),VNS_duty_cycle(3));
     else
-        vns_pulse_ideal = generate_ideal_vns_pulse(fs_out,dutycycle_params(1),dutycycle_params(2), dutycycle_params(3));
+        vns_pulse_ideal = generate_ideal_vns_pulse(fs_out,VNS_duty_cycle(1),VNS_duty_cycle(2), VNS_duty_cycle(3));
         warning('Too Many inputs on duty cycle - possible error')
     end
     is_stim_on_xcorr = false(size(is_stim_on));
@@ -112,7 +130,7 @@ if convolve_ideal_stim_flag
         [r,lag] = xcorr(pulse_dat, vns_pulse_ideal);
         [~,max_ind] = max(r);
         start_ind = onsets(n) + lag(max_ind);
-        stop_ind = start_ind + round(dutycycle_params(2)*fs_out);
+        stop_ind = start_ind + round(VNS_duty_cycle(2)*fs_out);
         if start_ind < 1
             start_ind = 1;
         end
@@ -124,5 +142,6 @@ if convolve_ideal_stim_flag
     
     is_stim_on = is_stim_on_xcorr;
 end
+
 
 end
