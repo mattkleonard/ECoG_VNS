@@ -1,18 +1,18 @@
-subj = 'EC131';
+subj = 'EC151';
 rootdir = '/Users/mattleonard/Documents/Research/data';
 
 %% FLAGS & PARAMS
 
 preprocess_flag = 1;        % whether to preprocess data
-    VNS_parms = [25 2.25 250];  % stim parameters used (frequency, amplitude, pw)
-    VNS_duty_cycle = [2,26,2];  % timing of VNS duty cycle (ramp,duration,ramp)
-    EKG_ch = [137];         % indices of EKG channels
+    VNS_parms = [25 0.4 250];  % stim parameters used (frequency, amplitude, pw)
+    VNS_duty_cycle = [2,28,0];  % timing of VNS duty cycle (ramp,duration,ramp)
+    EKG_ch = [43];         % indices of EKG channels
     load_range = [];            % if empty, load all files in h5, otherwise load specified files
     notch_60Hz_flag = 1;        % whether to notch 60Hz + harmonics
     notch_VNS_flag = 1;         % whether to notch VNS artifact
     CARflag = 0;                % whether to CAR the data
     fsDs = 400;                 % desired downsampled fs
-    ERP_times = [-30 30];       % window for ERPs
+    ERP_times = [-10 10];       % window for ERPs
     h5_file_info = [];      % which h5 file(s) to use
     save_preproc_flag = 1;      % whether to save output
     outfile_name = [subj '_VNS_ERPs_' ...
@@ -20,8 +20,8 @@ preprocess_flag = 1;        % whether to preprocess data
         num2str(VNS_parms(2)) '_' ...
         num2str(VNS_parms(3))]; % name of outfile
 
-zscore_flag = 1;            % whether to z-score data (will only do once)
-find_bad_data_flag = 1;     % whether to reject bad trials/channels
+zscore_flag = 0;            % whether to z-score data (will only do once)
+find_bad_data_flag = 0;     % whether to reject bad trials/channels
     thresh = 10;                % STD threshold for bad trials
     nBadTrialThresh = 20;       % nTrials threshold for bad channels
     remove_badTrial_flag = 1;   % whether to remove bad trials
@@ -43,8 +43,14 @@ test_stats_flag = 0;        % whether to run statistics
 trls = [];                  % which trials to use
 elec = 6;                   % which elec to plot
 
-recType = 'clinical';       % 'clinical' or 'TDT'
-ch = 1:136;                 % indices of ECoG channels to use
+recType = 'TDT';       % 'clinical' or 'TDT'
+ch = [1 2 3 4 5 6 7 ...
+    8 9 11 12 13 14 ...
+    33 34 35 36 37 38 ...
+    39 40 43 44 45 47 48 ...
+    65 66 67 68 69 70 ...
+    71 72 73 74 75 76 ...
+    77 78 81 82 83 84];                 % indices of ECoG channels to use
 
 %% SET UP DIRECTORIES
 

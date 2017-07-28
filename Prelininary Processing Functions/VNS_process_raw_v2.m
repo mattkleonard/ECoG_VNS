@@ -120,6 +120,30 @@ else
     save_raw_erps = false;
 end
 
+% whether to save output
+if ~isempty(find(strcmpi(varargin,'save_preproc_flag')))
+    save_preproc_flag = varargin{find(strcmpi(varargin,'save_preproc_flag'))+1};
+else
+    save_preproc_flag = false;
+end
+
+% out directory
+if ~isempty(find(strcmpi(varargin,'out_dir')))
+    out_dir = varargin{find(strcmpi(varargin,'out_dir'))+1};
+end
+
+% outfile name (and ask if you want to overwrite existing file)
+if ~isempty(find(strcmpi(varargin,'outfile_name')))
+    outfile_name = varargin{find(strcmpi(varargin,'outfile_name'))+1};
+end
+if exist([out_dir filesep outfile_name '.mat'])
+    cont_flag = input('Outfile already exists. Overwrite? (y/n) ','s');
+    if strcmpi(cont_flag,'n')
+        return;
+    elseif strcmpi(cont_flag,'y')
+        fprintf('OVERWRITING EXISTING .mat FILE!\n');
+    end
+end
 
 %% Process Data Parameters:
 theta_freqs = [4,7];
@@ -157,6 +181,7 @@ end
 cum_data_length = cumsum(dat_length_ds);
 file_onset_inds_ds = 1+[0; cum_data_length(1:(end-1))]; % starting indecies of each block on downsampled data
 file_offset_ind_ds = cum_data_length(1:end); % indicates the index where the block data begins within aggregated data.
+file_info = [];
 
 %% Load Data:
 for k = 1:length(test_files)
@@ -234,6 +259,10 @@ for k = 1:length(test_files)
         'convolve_ideal_stim_flag',0);
     is_stim_on(file_onset_inds_ds(k):file_offset_ind_ds(k)) = is_stim_on_blk;
     
+    if length(onsets{k}) > 0
+        file_info = [file_info ; cellstr(repmat(test_files{k}(7:14),length(onsets{k}),1))];
+    end
+        
     %% Load FileBlockNumber
     blk_index(file_onset_inds_ds(k):file_offset_ind_ds(k)) = k;
     
@@ -250,12 +279,18 @@ VNS_dat.dat_dir = rootdir; % the directory containing the raw data
 VNS_dat.sampFreq = fsDs; % sample frequency
 VNS_dat.stim_onsets_inds = onsets;
 VNS_dat.stim_offset_inds = offsets;
+VNS_dat.file_info = file_info;
 VNS_dat.is_stim_on = is_stim_on;
 VNS_dat.blk_index = blk_index; % index of list of blocks that gave rise to current data.
 VNS_dat.anatomy_elecs = anatomy_elecs;
+VNS_dat.EKG_ch = ekg_ch;
 VNS_dat.time_axis = time_axis;
 if save_raw_erps
     VNS_dat.raw_erps = raw_erps;
+end
+if save_preproc_flag
+    fprintf('Saving outfile....\n');
+    save([out_dir filesep outfile_name '.mat'],'VNS_dat','-v7.3');
 end
 
 

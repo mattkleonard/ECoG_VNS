@@ -46,7 +46,9 @@ end
 
 freq_axis = (fs_dat/2)*(0:floor(length(data)/2-1))/floor(length(data)/2-1);
 freq_axis = [freq_axis, sort(freq_axis,'descend')];
-
+if length(freq_axis) == length(data) - 1
+    freq_axis = [freq_axis 0];
+end
 
 vns_stim = zeros(length(data),1);
 vns_stim_envs = zeros([length(data),length(freq_samples)]);

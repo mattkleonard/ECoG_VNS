@@ -1,4 +1,41 @@
+function VNS_plot_ERPs(VNS_dat,trls,elec,varargin)
 
+%%
+
+% whether to downsample data
+if ~isempty(find(strcmpi(varargin,'ds_flag')));
+    ds_flag = varargin{find(strcmpi(varargin,'ds_flag'))+1};
+else
+    ds_flag = 0; % don't downsample by default
+end
+
+% whether to plot average ERPs
+if ~isempty(find(strcmpi(varargin,'plot_avg_ERP_flag')));
+    plot_avg_ERP_flag = varargin{find(strcmpi(varargin,'plot_avg_ERP_flag'))+1};
+else
+    plot_avg_ERP_flag = 0; % don't downsample by default
+end
+
+% whether to plot single trial rasters
+if ~isempty(find(strcmpi(varargin,'plot_raster_ERP_flag')));
+    plot_raster_ERP_flag = varargin{find(strcmpi(varargin,'plot_raster_ERP_flag'))+1};
+else
+    plot_raster_ERP_flag = 0; % don't downsample by default
+end
+
+% whether to plot average ERPs for a specific region
+if ~isempty(find(strcmpi(varargin,'plot_avg_ERP_region_flag')));
+    plot_avg_ERP_region_flag = varargin{find(strcmpi(varargin,'plot_avg_ERP_region_flag'))+1};
+else
+    plot_avg_ERP_region_flag = 0; % don't downsample by default
+end
+
+% whether to plot average ERP and raster for a single channel
+if ~isempty(find(strcmpi(varargin,'plot_single_chan_flag')));
+    plot_single_chan_flag = varargin{find(strcmpi(varargin,'plot_single_chan_flag'))+1};
+else
+    plot_single_chan_flag = 0; % don't downsample by default
+end
 
 
 %% GET TRIALS AND DOWNSAMPLE IF NECESSARY
@@ -94,7 +131,7 @@ if plot_raster_ERP_flag
     end
 end
 
-%%
+%% PLOT ERPs FOR SPECIFIC REGIONS
 
 if plot_avg_ERP_region_flag
     disp(unique(VNS_dat.anatomy_elecs));
@@ -163,48 +200,8 @@ if plot_single_chan_flag
     xlabel('Time (sec)');
 end
 
-%% TEST PRE/POST STIM DISTRIBUTIONS
-% 
-% twins = [-10 0 ; 0 10];
-% alpha_level = 0.05/size(VNS_dat.raw_erps,1);
-% 
-% figure;
-% for i = 1:size(VNS_dat.raw_erps,1)
-%         p = plotGridPosition_new(i,size(VNS_dat.raw_erps,1),ceil(sqrt(size(VNS_dat.raw_erps,1))));
-%         subplot('Position',p);
-%         
-%         if ~strcmpi(VNS_dat.anatomy_elecs(i),'Left-Cerebral-White-Matter') && ~strcmpi(VNS_dat.anatomy_elecs(i),'')
-% 
-%         % test stats
-%         testDist1 = squeeze(VNS_dat.raw_erps(i,find(VNS_dat.time_axis==twins(1)):find(VNS_dat.time_axis==twins(2)),:));
-%         testDist2 = squeeze(VNS_dat.raw_erps(i,find(VNS_dat.time_axis==twins(3)):find(VNS_dat.time_axis==twins(4)),:));
-%         pval(i) = ranksum(testDist1(:),testDist2(:));
-%         %     pval(i) = signrank(testDist1(:),testDist2(:));
-%         %     [~,pval(i)] = ttest2(testDist1(:),testDist2(:));
-%         
-%         hbar(i) = barwitherr([ste(testDist1(:)),ste(testDist2(:))],...
-%             [mean(testDist1(:)),mean(testDist2(:))]);
-%         
-%         if pval(i) <= alpha_level
-%             set(hbar(i),'FaceColor','r');
-%         end
-%         axis tight;
-%         sp(i) = gca;
-%         
-%         set(gca,'XTickLabel',[],'YTickLabel',[]);
-%     end
-% end
-% yl = cell2mat(get(sp, 'Ylim'));
-% ylnew = [min(yl(:,1)) max(yl(:,2))];
-% set(sp, 'Ylim', ylnew);
-% for i = 1:length(sp)
-%     set(gcf,'CurrentAxes',sp(i));
-%     line(get(gca,'XLim'),[0 0],'Color','k');
-%     
-%     text(0.5,(max(get(gca,'YLim')) - (max(get(gca,'YLim'))*0.1)),num2str(i));
-% end
-% 
-% %%
+
+%%
 % 
 % figure;
 % for i = 1:size(VNS_dat.raw_erps,1)
